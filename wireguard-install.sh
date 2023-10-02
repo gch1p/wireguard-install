@@ -8,6 +8,9 @@ ORANGE='\033[0;33m'
 GREEN='\033[0;32m'
 NC='\033[0m'
 
+PARAMS_FILE=/etc/wireguard/params
+[ -n "$WG_INSTANCE" ] && PARAMS_FILE="$PARAMS_FILE-$WG_INSTANCE"
+
 function isRoot() {
 	if [ "${EUID}" -ne 0 ]; then
 		echo "You need to run this script as root"
@@ -102,7 +105,13 @@ function initialCheck() {
 }
 
 function installQuestions() {
-	echo "Welcome to the WireGuard installer!"
+	local instance_label=
+	local default_ifname=wg0
+	if [ -n "$WG_INSTANCE" ]; then
+		instance_label="($WG_INSTANCE instance) "
+		default_ifname="wg_${WG_INSTANCE/-/_}"
+	fi
+	echo "Welcome to the WireGuard ${instance_label}installer!"
 	echo "The git repository is available at: https://github.com/angristan/wireguard-install"
 	echo ""
 	echo "I need to ask you a few questions before starting the setup."
@@ -123,8 +132,9 @@ function installQuestions() {
 		read -rp "Public interface: " -e -i "${SERVER_NIC}" SERVER_PUB_NIC
 	done
 
+	[ -n "$WG_INSTANCE" ] && SERVER_WG_NIC="$WG_INSTANCE"
 	until [[ ${SERVER_WG_NIC} =~ ^[a-zA-Z0-9_]+$ && ${#SERVER_WG_NIC} -lt 16 ]]; do
-		read -rp "WireGuard interface name: " -e -i wg0 SERVER_WG_NIC
+		read -rp "WireGuard interface name: " -e -i $default_ifname SERVER_WG_NIC
 	done
 
 	until [[ ${SERVER_WG_IPV4} =~ ^([0-9]{1,3}\.){3} ]]; do
@@ -225,7 +235,7 @@ SERVER_PRIV_KEY=${SERVER_PRIV_KEY}
 SERVER_PUB_KEY=${SERVER_PUB_KEY}
 CLIENT_DNS_1=${CLIENT_DNS_1}
 CLIENT_DNS_2=${CLIENT_DNS_2}
-ALLOWED_IPS=${ALLOWED_IPS}" >/etc/wireguard/params
+ALLOWED_IPS=${ALLOWED_IPS}" >$PARAMS_FILE
 
 	# Add server interface
 	echo "[Interface]
@@ -521,8 +531,8 @@ function manageMenu() {
 initialCheck
 
 # Check if WireGuard is already installed and load params
-if [[ -e /etc/wireguard/params ]]; then
-	source /etc/wireguard/params
+if [[ -e $PARAMS_FILE ]]; then
+	source $PARAMS_FILE
 	manageMenu
 else
 	installWireGuard
